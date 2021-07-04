@@ -1,14 +1,67 @@
 package v1
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"sort"
+
 	"github.com/grafana/tempo/tempodb/backend"
 	"github.com/grafana/tempo/tempodb/encoding/common"
-	v0 "github.com/grafana/tempo/tempodb/encoding/v0"
 )
+
+type readerBytes struct {
+	index []byte
+	r     common.RecordReaderWriter
+}
 
 // NewIndexReader returns an index reader for a byte slice of marshalled
 // ordered records.
 // The index has not changed between v0 and v1.
 func NewIndexReader(r backend.ContextReader) (common.IndexReader, error) {
-	return v0.NewIndexReader(r)
+	index, err := r.ReadAll(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	mod := len(index) % recordLength
+	if mod != 0 {
+		return nil, fmt.Errorf("records are an unexpected number of bytes %d", len(index))
+	}
+
+	return &readerBytes{
+		index: index,
+		r:     NewRecordReaderWriter(),
+	}, nil
+}
+
+func (r *readerBytes) At(_ context.Context, i int) (*common.Record, error) {
+	if i < 0 || i >= len(r.index)/recordLength {
+		return nil, nil
+	}
+
+	buff := r.index[i*recordLength : (i+1)*recordLength]
+	record := r.r.UnmarshalRecord(buff)
+	return &record, nil
+}
+
+func (r *readerBytes) Find(_ context.Context, id common.ID) (*common.Record, int, error) {
+	numRecords := r.r.RecordCount(r.index)
+	var record common.Record
+
+	i := sort.Search(numRecords, func(i int) bool {
+		buff := r.index[i*recordLength : (i+1)*recordLength]
+		record = r.r.UnmarshalRecord(buff)
+
+		return bytes.Compare(record.ID, id) >= 0
+	})
+
+	if i >= 0 && i < numRecords {
+		buff := r.index[i*recordLength : (i+1)*recordLength]
+		record = r.r.UnmarshalRecord(buff)
+
+		return &record, i, nil
+	}
+
+	return nil, -1, nil
 }

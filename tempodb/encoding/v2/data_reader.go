@@ -5,7 +5,6 @@ import (
 
 	"github.com/grafana/tempo/tempodb/backend"
 	"github.com/grafana/tempo/tempodb/encoding/common"
-	v0 "github.com/grafana/tempo/tempodb/encoding/v0"
 	v1 "github.com/grafana/tempo/tempodb/encoding/v1"
 )
 
@@ -23,13 +22,18 @@ var constDataHeader = &dataHeader{}
 
 // NewDataReader constructs a v2 DataReader that handles paged...reading
 func NewDataReader(r backend.ContextReader, encoding backend.Encoding) (common.DataReader, error) {
+	dr, err := v1.NewDataReader(r, encoding)
+	if err != nil {
+		return nil, err
+	}
+
 	v2DataReader := &dataReader{
 		contextReader: r,
-		dataReader:    v0.NewDataReader(r),
+		dataReader:    dr,
 	}
 
 	// wrap the paged reader in a compressed/v1 reader and return that
-	v1DataReader, err := v1.NewNestedDataReader(v2DataReader, encoding)
+	v1DataReader, err := v1.NewNestedDataReader(v2DataReader.contextReader, encoding)
 	if err != nil {
 		return nil, err
 	}
