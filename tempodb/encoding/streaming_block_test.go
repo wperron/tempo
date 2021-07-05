@@ -20,7 +20,7 @@ import (
 	"github.com/grafana/tempo/tempodb/backend"
 	"github.com/grafana/tempo/tempodb/backend/local"
 	"github.com/grafana/tempo/tempodb/encoding/common"
-	v0 "github.com/grafana/tempo/tempodb/encoding/v0"
+	v2 "github.com/grafana/tempo/tempodb/encoding/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -206,7 +206,12 @@ func streamingBlock(t *testing.T, cfg *BlockConfig, w backend.Writer) (*Streamin
 
 	buffer := &bytes.Buffer{}
 	writer := bufio.NewWriter(buffer)
-	appender := NewAppender(v0.NewDataWriter(writer))
+	dw, err := v2.NewDataWriter(writer, cfg.Encoding)
+	// TODO(wperron) handle error correctly
+	if err != nil {
+		panic(err)
+	}
+	appender := NewAppender(dw)
 
 	numMsgs := 1000
 	reqs := make([][]byte, 0, numMsgs)
@@ -231,7 +236,7 @@ func streamingBlock(t *testing.T, cfg *BlockConfig, w backend.Writer) (*Streamin
 			minID = id
 		}
 	}
-	err := appender.Complete()
+	err = appender.Complete()
 	require.NoError(t, err)
 	err = writer.Flush()
 	require.NoError(t, err, "unexpected error flushing writer")
@@ -256,9 +261,14 @@ func streamingBlock(t *testing.T, cfg *BlockConfig, w backend.Writer) (*Streamin
 		expectedRecords++
 	}
 
+	dr, err := v2.NewDataReader(backend.NewContextReaderWithAllReader(bytes.NewReader(buffer.Bytes())), cfg.Encoding)
+	// TODO(wperron) handle error correctly
+	if err != nil {
+		panic(err)
+	}
 	iter := NewRecordIterator(appender.Records(),
-		v0.NewDataReader(backend.NewContextReaderWithAllReader(bytes.NewReader(buffer.Bytes()))),
-		v0.NewObjectReaderWriter())
+		dr,
+		v2.NewObjectReaderWriter())
 
 	block, err := NewStreamingBlock(cfg, originatingMeta.BlockID, originatingMeta.TenantID, []*backend.BlockMeta{originatingMeta}, originatingMeta.TotalObjects)
 	require.NoError(t, err, "unexpected error completing block")
