@@ -17,6 +17,8 @@ type dataWriter struct {
 
 	objectRW     common.ObjectReaderWriter
 	objectBuffer *bytes.Buffer
+
+	currHeader *dataHeader
 }
 
 // NewDataWriter creates a paged page writer
@@ -39,12 +41,15 @@ func NewDataWriter(writer io.Writer, encoding backend.Encoding) (common.DataWrit
 		compressedBuffer:  compressedBuffer,
 		objectRW:          NewObjectReaderWriter(),
 		objectBuffer:      &bytes.Buffer{},
+		currHeader:        &dataHeader{},
 	}, nil
 }
 
 // Write implements DataWriter
 func (p *dataWriter) Write(id common.ID, obj []byte) (int, error) {
-	return p.objectRW.MarshalObjectToWriter(id, obj, p.objectBuffer)
+	n, err := p.objectRW.MarshalObjectToWriter(id, obj, p.objectBuffer)
+	p.currHeader.rawSize += n
+	return n, err
 }
 
 // CutPage implements DataWriter
@@ -60,7 +65,7 @@ func (p *dataWriter) CutPage() (int, error) {
 	p.compressionWriter.Close()
 
 	// now marshal the buffer as a page to the output
-	bytesWritten, err := marshalPageToWriter(p.compressedBuffer.Bytes(), p.outputWriter, constDataHeader)
+	bytesWritten, err := marshalPageToWriter(p.compressedBuffer.Bytes(), p.outputWriter, p.currHeader)
 	if err != nil {
 		return 0, err
 	}
@@ -68,6 +73,7 @@ func (p *dataWriter) CutPage() (int, error) {
 	// reset buffers for the next write
 	p.objectBuffer.Reset()
 	p.compressedBuffer.Reset()
+	p.currHeader.rawSize = 0
 	p.compressionWriter, err = p.pool.ResetWriter(p.compressedBuffer, p.compressionWriter)
 	if err != nil {
 		return 0, err
