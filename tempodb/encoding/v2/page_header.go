@@ -32,7 +32,7 @@ func (h *dataHeader) unmarshalHeader(b []byte) error {
 }
 
 func (h *dataHeader) headerLength() int {
-	return DataHeaderLength
+	return h.rawSize
 }
 
 func (h *dataHeader) marshalHeader(b []byte) error {
