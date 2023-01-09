@@ -28,7 +28,6 @@ require (
 	github.com/gogo/status v1.1.1
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
-	github.com/google/flatbuffers v2.0.0+incompatible
 	github.com/google/go-cmp v0.5.8
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
@@ -94,6 +93,8 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+require github.com/google/flatbuffers/go v0.0.0-20230108230133-3b8644d32c50
 
 require (
 	cloud.google.com/go v0.102.0 // indirect
